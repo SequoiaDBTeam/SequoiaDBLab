@@ -4,7 +4,7 @@ version: 1.0
 enable_checker: true
 ---
 
-# 使用 Docker 部署 SequoiaDB
+# 使用 Docker 部署 SequoiaDB 分布式集群
 
 ## 实验介绍
 
