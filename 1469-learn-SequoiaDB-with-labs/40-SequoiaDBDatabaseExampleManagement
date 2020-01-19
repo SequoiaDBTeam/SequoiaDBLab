@@ -1,0 +1,2031 @@
+---
+show: step
+version: 1.0 
+---
+
+# 数据库实例管理
+
+## 一 课程介绍
+
+数据库实例管理简介：
+
+1. 巨杉数据库提供了多种的对外接口的实例，包括：MySQL，PostgreSQL，SparkSQL，S3，NFS等接口实例。本课程将简单介绍这些接口实例的安装配置及简单使用。
+2. 目标与收获，通过对本次课程的学习，将能够了解到上述接口实例的安装配置步骤，及如何与Sequoiadb进行交互完成对结构化数据及非结构化数据的操作。
+3. 涉及的技术和知识点包括：Sequoiadb启停及sdb命令行工具，MySQL，PostgreSQL，SparkSQL实例的简单配置及基本命令行工具操作，S3实例配置及使用curl进行对象数据管理，fuse工具基本使用及再linux中文件的拷贝/删除/编辑。
+4. 本次课程面向的是巨杉数据库中级认证考试的人员。
+5. 需要学习的前置课程是巨杉数据库初级认证。
+6. 试验环境是运行在docker容器内的ubuntu linux操作系统。
+
+#### 知识点
+
+本实验/课程中涉及到以下的知识点。
+
+- MySQL基本操作
+- PostgreSQL基本操作
+- SparkSQL基本操作
+- S3接口的curl基本操作
+- fuse 文件系统基本操作
+- ...
+
+## 二 MySQL实例简介步骤
+MySQL 是一款开源的关系型数据库管理系统，也是目前最流行的关系型数据库管理系统之一，支持标准的 SQL 语言。 SequoiaDB 支持创建MySQL实例，完全兼容MySQL语法和协议，用户可以使用SQL语句访问 SequoiaDB 数据库，完成对数据的增、删、查、改操作以及其他MySQL语法操作。SequoiaDB所支持的 MySQL 版本 MySQL 5.7.24+ 。
+
+### 2.1 课程环境准备步骤
+
+root用户进入介质目录，检查安装介质及启动sdb进程
+```
+sudo su root
+cd /opt/
+ls
+```
+预期输出
+```
+sequoiadb  sequoiasql
+```
+
+### 2.2 启动巨杉数据库进程
+```
+su - sdbadmin
+sdbstart -t all
+```
+预期输出
+```
+Success: sequoiadb(11830) is successfully started (159)
+Success: sequoiadb(11840) is successfully started (162)
+Success: sequoiadb(11800) is successfully started (165)
+Success: sequoiadb(11820) is successfully started (168)
+Success: sequoiadb(11810) is successfully started (171)
+Total: 5; Succeed: 5; Failed: 0
+```
+
+```
+sdblist -l
+```
+预期输出
+```
+Name       SvcName       Role        PID       GID    NID    PRY  GroupName            StartTime            DBPath
+sequoiadb  11830         data        159       -      -      N    -                    2020-01-19-03.25.02  /opt/sequoiadb/database/data/11830/
+sequoiadb  11840         data        162       -      -      N    -                    2020-01-19-03.25.02  /opt/sequoiadb/database/data/11840/
+sequoiadb  11800         catalog     165       -      -      N    -                    2020-01-19-03.25.02  /opt/sequoiadb/database/catalog/11800/
+sequoiadb  11820         data        168       -      -      N    -                    2020-01-19-03.25.02  /opt/sequoiadb/database/data/11820/
+sequoiadb  11810         coord       171       -      -      Y    SYSCoord             2020-01-19-03.25.02  /opt/sequoiadb/database/coord/11810/
+Total: 5
+```
+
+### 2.3 创建MySQL实例
+```
+cd /opt/sequoiasql/mysql/bin
+```
+查看MySQL实例情况
+```
+./sdb_sql_ctl status
+```
+预期输出：
+```
+INSTANCE   PID        SVCNAME    SQLDATA                                  SQLLOG                                  
+myinst     1059       -          /opt/sequoiasql/mysql/bin/database/3306/ /opt/sequoiasql/mysql/myinst.log        
+Total: 1; Run: 1
+```
+检查配置文件：
+```
+ls -l /opt/sequoiasql/mysql/database/3306/auto.cnf
+```
+-rw-r----- 1 sdbadmin sdbadmin_group 2069 1月   6 07:52 /opt/sequoiasql/mysql/database/3306/auto.cnf
+
+编辑auto.cnf配置文件：
+```
+vim /opt/sequoiasql/mysql/database/3306/auto.cnf
+```
+
+重要参数：
+
+SequoiaDB addresses（包括巨杉数据库协调节点的主机名/ip地址，端口号；可以配置多个协调节点）
+
+sequoiadb_conn_addr=localhost:11810
+
+Replica size of write operations.（副本同步策略，sdb多副本的部署情况使用-1.）
+
+sequoiadb_replica_size=1
+
+### 2.4 MySQL实例操作
+查看实例状态
+```
+cd /opt/sequoiasql/mysql/bin
+./sdb_sql_ctl status
+```
+如果在运行，先停止实例
+```
+./sdb_sql_ctl stop myinst
+```
+启动mysql实例
+```
+./sdb_sql_ctl start myinst 
+
+Check port is available ...
+
+./sdb_sql_ctl: line 78: netstat: command not found
+
+Starting instance myinst ...
+
+ok (PID: 13162)
+```
+### 2.5 在MySQL实例中创建数据库
+
+使用sdbadmin用户执行：
+```
+mysql -h127.0.0.1 -uroot -p
+```
+
+设置root密码：
+```
+set password for 'root'@'localhost'='root'
+```
+
+检查现有数据库：
+```
+mysql> show databases;
+
++--------------------+
+| Database           |
++--------------------+
+| information_schema |
+| mysql              |
+| performance_schema |
+| sys                |
++--------------------+
+4 rows in set (0.00 sec)
+```
+退出mysql命令行
+```
+mysql> quit:
+```
+
+在sdb命令行中观察CS,CL情况：
+```
+sdbadmin@sdb:/opt/sequoiasql/mysql/bin$ sdb
+```
+Welcome to SequoiaDB shell!
+help() for help, Ctrl+c or quit to exit
+```
+> db=new Sdb()
+
+localhost:11810
+Takes 0.003555s.
+```
+查看sequoiadb中的集合信息：
+```
+> db.list(4)
+
+Return 0 row(s).
+Takes 0.011117s.
+```
+退出sdb命令行：
+```
+> quit
+```
+在Sequoiadb中还没有集合空间/集合。
+
+在MySQL实例中创建新数据库testdb：
+```
+mysql -h127.0.0.1 -uroot -p
+
+mysql> create database testsdb;
+```
+Query OK, 1 row affected (0.00 sec)
+```
+mysql> show databases;
++--------------------+
+| Database           |
++--------------------+
+| information_schema |
+| mysql              |
+| performance_schema |
+| sys                |
+| testsdb            |
++--------------------+
+5 rows in set (0.01 sec)
+```
+
+### 2.6 在MySQL实例中创建测试表
+在mysql实例配置中缺省使用sequoiadb存储引擎，所以在生成表的时候可以不用指定存储引擎。
+```
+mysql> use testsdb;
+Database changed
+mysql> create table testtab1(my_name varchar(40),my_age int,my_address varchar(50));
+Query OK, 0 rows affected (1.57 sec)
+mysql> quit;
+```
+在sdb中观察新建表情况：
+```
+sdbadmin@sdb:/opt/sequoiasql/mysql/bin$ sdb
+Welcome to SequoiaDB shell!
+help() for help, Ctrl+c or quit to exit
+> db=new Sdb()
+localhost:11810
+Takes 0.001248s.
+```
+查看sdb中的集合空间，能够看到以mysql实例中的database testsdb命名的集合空间：
+```
+> db.list(SDB_LIST_COLLECTIONSPACES)
+{
+  "Name": "testsdb"
+}
+Return 1 row(s).
+Takes 0.000929s.
+```
+查看sdb中的集合，能够看到以mysql实例中的database testsdb中创建的表testtab1：
+```
+> db.list(SDB_LIST_COLLECTIONS)
+{
+  "Name": "testsdb.testtab1"
+}
+Return 1 row(s).
+Takes 0.000762s.
+```
+退出sdb命令行：
+```
+> quit
+```
+进入mysql命令行：
+```
+mysql -h127.0.0.1 -uroot -p
+```
+操作mysql实例中的表及数据：
+```
+mysql> use testsdb;
+mysql> insert into testtab1 values("name1",30,"chengdu,sichuan");
+Query OK, 1 row affected (0.03 sec)
+
+mysql> insert into testtab1 values("name2",31,"chengdu1,sichuan");
+Query OK, 1 row affected (0.00 sec)
+
+mysql> insert into testtab1 values("name3",33,"chengdu3,sichuan");
+Query OK, 1 row affected (0.00 sec)
+
+mysql> insert into testtab1 values("name4",34,"chengdu3,sichuan");
+Query OK, 1 row affected (0.00 sec)
+
+mysql> select * from testtab1;
++---------+--------+------------------+
+| my_name | my_age | my_address       |
++---------+--------+------------------+
+| name1   |     30 | chengdu,sichuan  |
+| name2   |     31 | chengdu1,sichuan |
+| name3   |     33 | chengdu3,sichuan |
+| name4   |     34 | chengdu3,sichuan |
++---------+--------+------------------+
+4 rows in set (0.00 sec)
+mysql> quit;
+```
+
+进入sdb命令行：
+```
+sdb
+> db=new Sdb()
+localhost:11810
+Takes 0.001046s.
+> db.list(SDB_LIST_COLLECTIONS)
+{
+  "Name": "testsdb.testtab1"
+}
+Return 1 row(s).
+Takes 0.000744s
+```
+在sdb命令行中查看CL和数据，与从mysql中插入的数据相同：
+```
+> db.testsdb.testtab1.find()
+{
+  "_id": {
+    "$oid": "5e12de3de9115266008959c0"
+  },
+  "my_name": "name1",
+  "my_age": 30,
+  "my_address": "chengdu,sichuan"
+}
+{
+  "_id": {
+    "$oid": "5e12de5ce9115266008959c1"
+  },
+  "my_name": "name2",
+  "my_age": 31,
+  "my_address": "chengdu1,sichuan"
+}
+{
+  "_id": {
+    "$oid": "5e12de6ae9115266008959c2"
+  },
+  "my_name": "name3",
+  "my_age": 33,
+  "my_address": "chengdu3,sichuan"
+}
+{
+  "_id": {
+    "$oid": "5e12de71e9115266008959c3"
+  },
+  "my_name": "name4",
+  "my_age": 34,
+  "my_address": "chengdu3,sichuan"
+}
+Return 4 row(s).
+Takes 0.002042s.
+```
+在sdb中删除数据：
+```
+> db.testsdb.testtab1.remove({my_name:"name4"})
+{
+  "DeletedNum": 1
+}
+Takes 0.001023s.
+> quit
+```
+在mysql命令行查看数据情况：
+```
+mysql -h127.0.0.1 -uroot -p
+mysql> use testsdb;
+mysql> select * from testtab1;
++---------+--------+------------------+
+| my_name | my_age | my_address       |
++---------+--------+------------------+
+| name1   |     30 | chengdu,sichuan  |
+| name2   |     31 | chengdu1,sichuan |
+| name3   |     33 | chengdu3,sichuan |
++---------+--------+------------------+
+3 rows in set (0.00 sec)
+```
+数据与sdb中相同。
+
+在MySQL中更新数据：
+```
+mysql> update testtab1 set my_age=50 where my_name='name3';
+Query OK, 1 row affected (0.00 sec)
+Rows matched: 1  Changed: 1  Warnings: 0
+
+mysql> select * from testtab1;                             
++---------+--------+------------------+
+| my_name | my_age | my_address       |
++---------+--------+------------------+
+| name1   |     30 | chengdu,sichuan  |
+| name2   |     31 | chengdu1,sichuan |
+| name3   |     50 | chengdu3,sichuan |
++---------+--------+------------------+
+3 rows in set (0.00 sec)
+```
+删除数据：
+```
+mysql> delete from testtab1 where my_name='name3';
+Query OK, 1 row affected (0.00 sec)
+
+mysql> select * from testtab1;                    
++---------+--------+------------------+
+| my_name | my_age | my_address       |
++---------+--------+------------------+
+| name1   |     30 | chengdu,sichuan  |
+| name2   |     31 | chengdu1,sichuan |
++---------+--------+------------------+
+2 rows in set (0.00 sec)
+
+mysql> quit
+```
+在sdb中观察数据，数据与mysql中的相同：
+```
+sdb
+> db=new Sdb()
+localhost:11810
+Takes 0.001140s.
+> db.testsdb.testtab1.find()
+{
+  "_id": {
+    "$oid": "5e1bdcabd628c3ea57ffff11"
+  },
+  "my_name": "name1",
+  "my_age": 30,
+  "my_address": "chengdu,sichuan"
+}
+{
+  "_id": {
+    "$oid": "5e1bdcb4d628c3ea57ffff12"
+  },
+  "my_name": "name2",
+  "my_age": 31,
+  "my_address": "chengdu1,sichuan"
+}
+Return 2 row(s).
+Takes 0.005336s.
+> quit
+```
+执行完成，退出docker
+```
+$exit
+#exit
+```
+删除Container
+```
+docker rm sdbtestfu
+```
+
+## 三，PostgreSQL 实例简介
+SequoiaDB支持创建PostgreSQL实例，完全兼容PostgreSQL语法，用户可以使用SQL语句访问SequoiaDB数据库，完成对数据的增、删、查、改及其他操作。
+
+### 3.1准备课程环境
+在属主机上启动docker课程容器，并进入container。
+```
+docker run -it --privileged=true --name sdbtestfu -h sdb sdbinstance5
+```
+一下步骤在Container中执行。
+
+启动sdb：
+```
+su - sdbadmin
+sdbstart -t all
+sdblist -l
+```
+进入PostgreSQL安装目录，检查是否有PostgreSQL安装包.
+```
+cd /sequoiadb/sequoiadb-3.2.4
+ls -l ls -l sequoiasql-postgresql-3.2.4-x86_64-installer.run
+```
+
+### 3.2 安装PostgreSQL实例,使用缺省的安装参数：
+```
+./sequoiasql-postgresql-3.2.4-x86_64-installer.run --mode text
+```
+```
+Please wait while Setup installs SequoiaSQL PostgreSQL Server on your computer.
+
+ Installing
+ 0% ______________ 50% ______________ 100%
+ #########################################
+
+----------------------------------------------------------------------------
+Setup has finished installing SequoiaSQL PostgreSQL Server on your computer.
+```
+### 3.3 创建pgsql实例,数据库及配置实例
+```
+su - sdbadmin
+cd /opt/sequoiasql/postgresql/bin
+```
+检查pgsql实例情况
+```
+./sdb_sql_ctl status
+
+INSTANCE   PID        SVCNAME    PGDATA                                   PGLOG                                   
+Total: 0; Run: 0
+```
+创建PostgreSQL实例：
+```
+./sdb_sql_ctl addinst myinst -D database/5432/
+Adding instance myinst ...
+ok
+```
+再次检查实例
+```
+./sdb_sql_ctl status
+INSTANCE   PID        SVCNAME    PGDATA                                   PGLOG                                   
+myinst     -          -          /opt/sequoiasql/postgresql/bin/database/5432/ /opt/sequoiasql/postgresql/myinst.log   
+Total: 1; Run: 0
+```
+启动pgsql实例
+```
+./sdb_sql_ctl start myinst
+Starting instance myinst ...
+ok (PID: 120650)
+```
+检查实例状态：
+```
+./sdb_sql_ctl status      
+INSTANCE   PID        SVCNAME    PGDATA                                   PGLOG                                   
+myinst     120650     5432       /opt/sequoiasql/postgresql/bin/database/5432/ /opt/sequoiasql/postgresql/myinst.log   
+Total: 1; Run: 1
+```
+创建 SequoiaSQL PostgreSQL 的 database
+```
+./sdb_sql_ctl createdb pgsdb myinst
+
+Creating database myinst ...
+ok
+```
+进入 SequoiaSQL PostgreSQL shell 环境
+```
+./psql -p 5432 pgsdb
+```
+管理sdb与pgsql 的数据库和表
+
+加载SequoiaDB连接驱动
+```
+pgsdb=# create extension sdb_fdw;
+CREATE EXTENSION
+```
+配置与SequoiaDB连接参数
+```
+pgsdb=# create server sdb_server foreign data wrapper sdb_fdw options(address '127.0.0.1', service '11810', preferedinstance 'A', transaction 'off');
+CREATE SERVER
+```
+退出psql命令行：
+```
+pgsdb=# \q
+```
+### 3.4 在sequoisdb中创建测试集合并关联到pgsql实例
+在sdb中创建CL
+
+查看sdb中的CL
+```
+sdbadmin@sdb:/opt/sequoiasql/postgresql/bin$ sdb
+Welcome to SequoiaDB shell!
+help() for help, Ctrl+c or quit to exit
+> db=new Sdb()
+localhost:11810
+Takes 0.003692s.
+> db.list(4);
+Return 0 row(s).
+Takes 0.000809s.
+```
+创建集合空间pgsdb名字与PostgreSQL中创建的数据库名称相同：
+```
+> db.createCS("pgsdb")
+localhost:11810.pgsdb
+Takes 0.004101s.
+```
+创建集合testtab1并插入数据：
+```
+> db.pgsdb.createCL("testtab1")
+localhost:11810.pgsdb.testtab1
+Takes 0.450711s.
+> db.pgsdb.testtab1.insert({my_name:"Name1",my_age:40,my_address:"chengd1.sichuan"})
+{
+  "InsertedNum": 1,
+  "DuplicatedNum": 0
+}
+Takes 0.001143s.
+> db.pgsdb.testtab1.insert({my_name:"Name2",my_age:42,my_address:"chengd2.sichuan"})
+{
+  "InsertedNum": 1,
+  "DuplicatedNum": 0
+}
+Takes 0.000590s.
+> db.pgsdb.testtab1.insert({my_name:"Name3",my_age:43,my_address:"chengd3.sichuan"})
+{
+  "InsertedNum": 1,
+  "DuplicatedNum": 0
+}
+Takes 0.000631s.
+> db.pgsdb.testtab1.insert({my_name:"Name4",my_age:44,my_address:"chengd4.sichuan"})
+{
+  "InsertedNum": 1,
+  "DuplicatedNum": 0
+}
+Takes 0.000586s.
+
+>  db.list(SDB_LIST_COLLECTIONS)
+{
+  "Name": "pgsdb.testtab1"
+}
+```
+退出sdb命令行：
+```
+> quit
+```
+关联SequoiaDB的集合空间与集合,创建一个外表，结构与sdb中的集合一致：
+进入psql命令行：
+```
+./psql -p 5432 pgsdb
+
+create foreign table testtab1 (my_name text, my_age int,my_address text) server sdb_server options ( collectionspace 'pgsdb', collection 'testtab1', decimal 'on');
+CREATE FOREIGN TABLE
+```
+更新表的统计信息
+```
+pgsdb=# analyze testtab1;
+ANALYZE
+```
+检查表：
+```
+pgsdb=# \d
+              List of relations
+ Schema |   Name   |     Type      |  Owner   
+--------+----------+---------------+----------
+ public | testtab1 | foreign table | sdbadmin
+(1 row)
+```
+看到一个foreign table。
+```
+gsdb=# \d testtab1;
+        Foreign table "public.testtab1"
+   Column   |  Type   | Modifiers | FDW Options 
+------------+---------+-----------+-------------
+ my_name    | text    |           | 
+ my_age     | integer |           | 
+ my_address | text    |           | 
+Server: sdb_server
+FDW Options: (collectionspace 'pgsdb', collection 'testtab1', "decimal" 'on')
+```
+### 3.5 在PostgreSQL实例中对数据进行操作
+```
+pgsdb=# select * from testtab1;
+ my_name | my_age |   my_address    
+---------+--------+-----------------
+ Name1   |     40 | chengd1.sichuan
+ Name2   |     42 | chengd2.sichuan
+ Name3   |     43 | chengd3.sichuan
+ Name4   |     44 | chengd4.sichuan
+ 
+ pgsdb=# delete from testtab1 where my_age=44;
+DELETE 1
+pgsdb=# select * from testtab1;
+ my_name | my_age |   my_address    
+---------+--------+-----------------
+ Name1   |     40 | chengd1.sichuan
+ Name2   |     42 | chengd2.sichuan
+ Name3   |     43 | chengd3.sichuan
+(3 rows)
+
+pgsdb=# insert into testtab1(my_name,my_age,my_address) values('Name4',44,'chengdu4.sichuan');
+INSERT 0 1
+
+pgsdb=# select * from testtab1;
+ my_name | my_age |    my_address    
+---------+--------+------------------
+ Name1   |     40 | chengd1.sichuan
+ Name2   |     42 | chengd2.sichuan
+ Name3   |     43 | chengd3.sichuan
+ Name4   |     44 | chengdu4.sichuan
+(4 rows)
+```
+退出psql命令行：
+```
+pgsdb=# \q
+```
+### 3.6 在sdb中观看数据，数据与psql中看到的一致.
+```
+sdb
+> db=new Sdb()
+> db.pgsdb.testtab1.find()
+{
+  "_id": {
+    "$oid": "5e12eed9a56655cfdcebe905"
+  },
+  "my_name": "Name1",
+  "my_age": 40,
+  "my_address": "chengd1.sichuan"
+}
+{
+  "_id": {
+    "$oid": "5e12eee6a56655cfdcebe906"
+  },
+  "my_name": "Name2",
+  "my_age": 42,
+  "my_address": "chengd2.sichuan"
+}
+{
+  "_id": {
+    "$oid": "5e12eef1a56655cfdcebe907"
+  },
+  "my_name": "Name3",
+  "my_age": 43,
+  "my_address": "chengd3.sichuan"
+}
+{
+  "_id": {
+    "$oid": "5e12f2d816120eac4b000000"
+  },
+  "my_name": "Name4",
+  "my_age": 44,
+  "my_address": "chengdu4.sichuan"
+}
+{
+  "_id": {
+    "$oid": "5e12f31e16120eac4b000001"
+  },
+  "my_name": "Name5",
+  "my_age": 45,
+  "my_address": "chengdu5.sichuan"
+}
+Return 5 row(s).
+Takes 0.001041s.
+> quit
+```
+删除pgsql 实例
+```
+root@sdb:/sequoiadb/sequoiadb-3.2.4# cd /opt/sequoiasql/postgresql
+root@sdb:/opt/sequoiasql/postgresql# ls
+bin  checksum.md5  compatible.sh  conf  include  lib  myinst.log  preUninstall.sh  share  uninstall  uninstall.dat
+root@sdb:/opt/sequoiasql/postgresql# ./uninstall
+```
+执行完成，退出docker
+```
+#exit
+```
+在属主机中，删除Container
+```
+docker rm sdbtestfu
+```
+
+## 四，SparkSQL实例简介
+Sequoiadb作为一个分布式集群数据库，可以为Spark提供数据；使用SparkSQL接口可以通过SQL方式非常方便的访问sequoiadb中存储的数据；并且可以在一个多副本的集群中，把spark部署在一个数据副本的服务器上，与其它副本隔离
+### 4.1 准备课程环境
+在属主机上启动docker课程容器，并进入container。
+```
+docker run -it --privileged=true --name sdbtestfu -h sdb sdbinstance5
+```
+以下步骤在Container中执行。
+
+Spark实例目录及启动sdb进程。
+``` 
+su - sdbadmin
+sdbstart -t all
+sdblist -l
+cd /opt
+ls -l
+
+cd spark-2.1.3-bin-hadoop2.7
+ls -l
+```
+本例中安装了spark 2.1.3
+
+### 4.2 Spark 实例配置
+
+配置用户互信，已经安装了ssh软件包；由于是由sdbadmin用户启动Spark,所以需要配置sdbadmin用户的ssh互相关系。
+
+使用root用户，启动sshd：
+```
+/etc/init.d/ssh start
+ * Starting OpenBSD Secure Shell server sshd 
+```
+为sdbadmin 用户配置互相：
+```
+su - sdbadmin
+
+ssh sdb ssh-keygen -t rsa
+ssh sdb cat ~/.ssh/id_rsa.pub>>~/.ssh/authorized_keys
+```
+sdbadmin的密码是：sdbadmin
+
+单机不需要拷贝到其它服务器上，如果是多机部署，需要配置所有服务器的互相关系。
+```
+scp ~/.ssh/authorized_keys ~/.ssh/known_hosts sdb:~/.ssh/
+```
+测试互相关系：
+```
+ssh sdb
+```
+
+配置Spark运行参数，编辑文件spark-env.sh
+```
+
+cd /opt/spark-2.1.3-bin-hadoop2.7/conf
+vi spark-env.sh
+```
+添加配置,使用ifconfig 看看Container的ip地址；根据输出的ip地址修改：
+示例如下：
+```
+SPARK_MASTER_PORT="7077"
+SPARK_MASTER_IP=172.17.0.3
+SPARK_CLASSPATH=/opt/sequoiadb/spark/spark-sequoiadb_2.11-3.2.4.jar:/opt/sequoiadb/java/sequoiadb-driver-3.2.4.jar:/opt/spark-2.1.3-bin-hadoop2.7/jars/mysql-connector-java-5.1.47.jar
+MASTER="spark://${SPARK_MASTER_IP}:${SPARK_MASTER_PORT}"
+#SPARK_WORK_MEMORY=1g
+#SPARK_EXECUTOR_CORES=2
+export JAVA_HOME=/opt/sequoiadb/java/jdk
+```
+配置slaves
+```
+cd /opt/spark-2.1.3-bin-hadoop2.7/conf
+cp slaves.template slaves
+vi slaves
+```
+在文件末尾增加slave运行的服务器名称，本例在本机上运行：
+```
+localhost
+```
+配置spark的hive-site.xml文件，在本例中已经配置，使用mysql做为元数据库，mysql的用户名和密码是：sdbadmin
+```
+cd /opt/spark-2.1.3-bin-hadoop2.7/conf
+vi hive-site.xml
+
+sdbadmin@sdb:/opt/spark-2.1.3-bin-hadoop2.7/conf$ more hive*xml
+```
+示例如下：
+```
+<configuration>
+   <property>
+     <name>hive.metastore.schema.verification</name>
+     <value>false</value>
+   </property>
+   <property>
+      <name>javax.jdo.option.ConnectionURL</name>
+      <value>jdbc:mysql://sdb:3306/metastore?createDatabaseIfNotExist=true</value>
+      <description>JDBC connect string for a JDBC metastore</description>
+   </property>
+   <property>
+      <name>javax.jdo.option.ConnectionDriverName</name>
+      <value>com.mysql.jdbc.Driver</value>
+      <description>Driver class name for a JDBC metastore</description>
+   </property>
+   <property>
+      <name>javax.jdo.option.ConnectionUserName</name>
+      <value>sdbadmin</value>
+   </property>
+   <property>
+      <name>javax.jdo.option.ConnectionPassword</name>
+      <value>sdbadmin</value>
+   </property>
+   <property>
+      <name>datanucleus.autoCreateSchema</name>
+      <value>false</value>
+      <description>creates necessary schema on a startup if one doesn't exist. set this to false, after creating it once</description>
+   </property>
+</configuration>
+```
+创建mysql实例,用于存储sparksql的元数据信息。
+
+1.root用户安装mysql实例
+```
+cd /sequoiadb/sequoiadb-3.2.4
+./sequoiasql-mysql-3.2.4-linux_x86_64-installer.run --mode text
+```
+缺省参数安装。
+
+2.创建MySQL实例
+```
+su - sdbadmin
+cd /opt/sequoiasql/mysql/bin
+./sdb_sql_ctl addinst myinst -D database/3306/
+```
+启动mysql实例作为元数据库,并添加用户。
+
+```
+mysql -h127.0.0.1 -uroot -p
+
+create user 'sdbadmin'@'%' identified by 'sdbadmin';
+GRANT ALL PRIVILEGES ON metastore.* TO 'sdbadmin'@'%' IDENTIFIED BY 'sdbadmin' WITH GRANT OPTION;
+FLUSH PRIVILEGES;
+quit;
+```
+
+### 4.3启动spark实例
+```
+/opt/spark-2.1.3-bin-hadoop2.7/sbin/start-all.sh
+```
+检查spark进程是否启动：
+```
+netstat -an|grep 7077
+sdbadmin@sdb:/opt/sequoiasql/mysql/bin$ netstat -an|grep 7077
+tcp        0      0 172.17.0.3:7077         0.0.0.0:*               LISTEN     
+tcp        0      0 172.17.0.3:37452        172.17.0.3:7077         ESTABLISHED
+tcp        0      0 172.17.0.3:7077         172.17.0.3:37452        ESTABLISHED
+```
+启动用于在spark中执行SQL的thriftserver进程：
+```
+/opt/spark-2.1.3-bin-hadoop2.7/sbin/start-thriftserver.sh --master spark://sdb:7077
+```
+检查thriftserver是否启动：
+```
+netstat -an|grep 10000
+tcp        0      0 0.0.0.0:10000           0.0.0.0:*               LISTEN     
+```
+
+### 4.5 在sdb中创建测试用集合空间和集合
+使用sdb命令行工具：
+
+```
+sdb
+> db=new Sdb()
+
+> db.createCS("sparkCS")
+localhost:11810.sparkCS
+Takes 0.184759s.
+> db.sparkCS.createCL("sparkCL")
+localhost:11810.sparkCS.sparkCL
+Takes 0.624262s.
+```
+插入测试数据：
+```
+> db.sparkCS.sparkCL.insert({my_name:"testuser1",my_age:20,my_address:"chengdu1,sichuan"})
+{
+  "InsertedNum": 1,
+  "DuplicatedNum": 0
+}
+Takes 0.006908s.
+> db.sparkCS.sparkCL.insert({my_name:"testuser2",my_age:22,my_address:"chengdu2,sichuan"})
+{
+  "InsertedNum": 1,
+  "DuplicatedNum": 0
+}
+Takes 0.002743s.
+> db.sparkCS.sparkCL.insert({my_name:"testuser3",my_age:23,my_address:"chengdu3,sichuan"})
+{
+  "InsertedNum": 1,
+  "DuplicatedNum": 0
+}
+Takes 0.001164s.
+```
+在sdb中查询数据：
+```
+> db.sparkCS.sparkCL.find()
+{
+  "_id": {
+    "$oid": "5e169d46a28dc4ea1b1a71fe"
+  },
+  "my_name": "testuser1",
+  "my_age": 20,
+  "my_address": "chengdu1,sichuan"
+}
+{
+  "_id": {
+    "$oid": "5e169d52a28dc4ea1b1a71ff"
+  },
+  "my_name": "testuser2",
+  "my_age": 22,
+  "my_address": "chengdu2,sichuan"
+}
+{
+  "_id": {
+    "$oid": "5e169d5ba28dc4ea1b1a7200"
+  },
+  "my_name": "testuser3",
+  "my_age": 23,
+  "my_address": "chengdu3,sichuan"
+}
+Return 3 row(s).
+
+quit
+```
+### 4.6在beeline中，通过sparkSQL实例操作数据。
+
+启动beeline，然后操作数据。
+```
+cd /opt/spark-2.1.3-bin-hadoop2.7/bin
+/opt/spark-2.1.3-bin-hadoop2.7/bin/beeline -u jdbc:hive2://sdb:10000 -n sdbadmin -p sdbadmin
+Connecting to jdbc:hive2://sdb:10000
+log4j:WARN No appenders could be found for logger (org.apache.hive.jdbc.Utils).
+log4j:WARN Please initialize the log4j system properly.
+log4j:WARN See http://logging.apache.org/log4j/1.2/faq.html#noconfig for more info.
+Connected to: Spark SQL (version 2.1.3)
+Driver: Hive JDBC (version 1.2.1.spark2)
+Transaction isolation: TRANSACTION_REPEATABLE_READ
+Beeline version 1.2.1.spark2 by Apache Hive
+0: jdbc:hive2://sdb:10000> 
+```
+或者进入beeline之后再连接数据库：
+```
+beeline> !connect jdbc:hive2://sdb:10000
+```
+关联sdb中的集合空间和集合，为spark中的一张表：
+```
+0: jdbc:hive2://sdb:10000> CREATE table sparkCL ( my_name string, my_age int,my_address string) using com.sequoiadb.spark OPTIONS ( host 'sdb:11810', collectionspace 'sparkCS', collection 'sparkCL');
++---------+--+
+| Result  |
++---------+--+
++---------+--+
+No rows selected (1.378 seconds)
+0: jdbc:hive2://sdb:10000> select * from sparkCL;
++------------+---------+-------------------+--+
+|  my_name   | my_age  |    my_address     |
++------------+---------+-------------------+--+
+| testuser1  | 20      | chengdu1,sichuan  |
+| testuser2  | 22      | chengdu2,sichuan  |
+| testuser3  | 23      | chengdu3,sichuan  |
++------------+---------+-------------------+--+
+3 rows selected (4.646 seconds)
+0: jdbc:hive2://sdb:10000> 
+```
+
+通过spark 插入数据：
+```
+0: jdbc:hive2://sdb:10000> insert into sparkCL values("testuser4",24,"chengdu4,sichuan");
++---------+--+
+| Result  |
++---------+--+
++---------+--+
+No rows selected (0.442 seconds)
+0: jdbc:hive2://sdb:10000> select * from sparkCL;
++------------+---------+-------------------+--+
+|  my_name   | my_age  |    my_address     |
++------------+---------+-------------------+--+
+| testuser1  | 20      | chengdu1,sichuan  |
+| testuser2  | 22      | chengdu2,sichuan  |
+| testuser3  | 23      | chengdu3,sichuan  |
+| testuser4  | 24      | chengdu4,sichuan  |
++------------+---------+-------------------+--+
+4 rows selected (0.395 seconds)
+0: jdbc:hive2://sdb:10000> 
+
+0: jdbc:hive2://sdb:10000> select * from sparkCL where my_name="testuser1";
++------------+---------+-------------------+--+
+|  my_name   | my_age  |    my_address     |
++------------+---------+-------------------+--+
+| testuser1  | 20      | chengdu1,sichuan  |
++------------+---------+-------------------+--+
+1 row selected (0.385 seconds)
+0: jdbc:hive2://sdb:10000> !quit
+```
+
+
+### 4.7 在sdb中查看数据.
+使用sdb命令行工具查看数据：
+```
+sdbadmin@sdb:/opt/spark-2.1.3-bin-hadoop2.7/conf$ sdb
+Welcome to SequoiaDB shell!
+help() for help, Ctrl+c or quit to exit
+> db=new Sdb()
+localhost:11810
+Takes 0.001274s.
+> db.sparkCS.sparkCL.find()
+{
+  "_id": {
+    "$oid": "5e169d46a28dc4ea1b1a71fe"
+  },
+  "my_name": "testuser1",
+  "my_age": 20,
+  "my_address": "chengdu1,sichuan"
+}
+{
+  "_id": {
+    "$oid": "5e169d52a28dc4ea1b1a71ff"
+  },
+  "my_name": "testuser2",
+  "my_age": 22,
+  "my_address": "chengdu2,sichuan"
+}
+{
+  "_id": {
+    "$oid": "5e169d5ba28dc4ea1b1a7200"
+  },
+  "my_name": "testuser3",
+  "my_age": 23,
+  "my_address": "chengdu3,sichuan"
+}
+{
+  "_id": {
+    "$oid": "5e16a755e4b07352e3230430"
+  },
+  "my_name": "testuser4",
+  "my_age": 24,
+  "my_address": "chengdu4,sichuan"
+}
+Return 4 row(s).
+Takes 0.001660s.
+> quit
+```
+### 4.8 停止SparkSQL实例
+```
+cd /opt/spark-2.1.3-bin-hadoop2.7/sbin
+```
+停止thriftserver
+``` 
+./stop-thriftserver.sh 
+```
+停止spark
+```
+./stop-all.sh
+```
+退出Container
+```
+$exit
+#exit
+```
+不要删除Container：sdbtestfu 用于后面的多实例课程。
+
+## 五，多实例数据共享简介
+
+在本例中将试验多个实例共存的情况，包括：mysql，postgresql，sparksql实例。
+在第上个示例中我们创建了sparksql实例，并使用mysql实例存储元数据；在本例中将增加一个postgresql实例，并且演示在MySQL实例中插入数据，
+然后通过postgresql和sparksql进行数据分析的过程。
+
+### 5.1 进入Container，安装postgresql实例（前面一次测试已经安装了mysql和sparksql实例）
+在属主机上运行：
+```
+docker start sdbtestfu
+docker attach sdbtestfu
+```
+在Container中，用root执行
+```
+cd /sequoiadb/sequoiadb-3.2.4
+./sequoiasql-postgresql-3.2.4-x86_64-installer.run
+```
+使用缺省安装参数。
+
+用sdbadmin用户创建实例并启动所有实例。
+```
+su - sdbadmin
+cd /opt/sequoiasql/postgresql/bin
+创建PostgreSQL实例：
+./sdb_sql_ctl addinst myinst -D database/5432/
+```
+
+启动所有的实例进程：
+
+1.启动sdb进程
+```
+sdbstart -t all
+```
+2.启动postgresql
+```
+cd /opt/sequoiasql/postgresql/bin
+./sdb_sql_ctl start myinst
+```
+3.启动mysql实例
+```
+cd /opt/sequoiasql/mysql/bin
+./sdb_sql_ctl start myinst
+```
+4.启动sparksql实例
+root用户执行：
+```
+/etc/init.d/ssh start
+```
+sdbadmin用户执行：
+```
+su - sdbadmin
+cd /opt/spark-2.1.3-bin-hadoop2.7/sbin
+ ./start-all.sh
+/opt/spark-2.1.3-bin-hadoop2.7/sbin/start-thriftserver.sh --master spark://sdb:7077
+```
+5.检查实例进程是否启动
+```
+netstat -an |grep LISTEN |grep 3306
+netstat -an |grep LISTEN |grep 5432
+netstat -an |grep LISTEN |grep 7077
+netstat -an |grep LISTEN |grep 10000 
+```
+### 5.2 通过mysql创建测试表，并插入数据
+通过MySQL实例创建两张表：
+表1：prod_tab
+字段定义：
+prod_name varchar(50),prod_id int,prod_place varchar(100)
+
+表2：sale_tab
+字段定义：
+prod_id int,prod_volume int,sale_quantity double
+
+```
+mysql -h127.0.0.1 -uroot -p
+
+create database testsdb;
+use testsdb;
+create table prod_tab(prod_name varchar(50),prod_id int,prod_place varchar(100));
+create table sale_tab(prod_id int,prod_volume int,sale_quantity double);
+```
+在prod_tab 中插入10个产品信息：
+```
+insert into prod_tab values("prod1",1,"chengdu1");
+insert into prod_tab values("prod2",2,"chengdu2");
+insert into prod_tab values("prod3",3,"chengdu3");
+insert into prod_tab values("prod4",4,"chengdu4");
+insert into prod_tab values("prod5",5,"chengdu5");
+insert into prod_tab values("prod6",6,"chengdu6");
+insert into prod_tab values("prod7",7,"chengdu7");
+insert into prod_tab values("prod8",8,"chengdu8");
+insert into prod_tab values("prod9",9,"chengdu9");
+insert into prod_tab values("prod10",10,"chengdu10");
+```
+在sale_tab中插入 24条记录
+```
+insert into sale_tab values(1,10,100);
+insert into sale_tab values(2,20,200);
+insert into sale_tab values(3,30,300);
+insert into sale_tab values(4,40,400);
+insert into sale_tab values(5,50,500);
+insert into sale_tab values(6,60,600);
+insert into sale_tab values(7,70,700);
+insert into sale_tab values(8,80,800);
+insert into sale_tab values(9,90,900);
+insert into sale_tab values(1,20,200);
+insert into sale_tab values(2,10,100);
+insert into sale_tab values(3,40,400);
+insert into sale_tab values(1,10,100);
+insert into sale_tab values(1,40,400);
+insert into sale_tab values(10,100,1000);
+insert into sale_tab values(3,10,100);
+insert into sale_tab values(7,10,100);
+insert into sale_tab values(6,10,100);
+insert into sale_tab values(5,10,100);
+insert into sale_tab values(8,10,100);
+insert into sale_tab values(5,50,500);
+insert into sale_tab values(10,10,100);
+insert into sale_tab values(4,10,100);
+insert into sale_tab values(1,10,100);
+```
+查看数据：
+```
+mysql> select * from sale_tab;
+mysql> select * from prod_tab;
+mysql> quit；
+```
+
+在sdb中查看数据：
+```
+sdb
+> db=new Sdb()
+localhost:11810
+Takes 0.001151s.
+> db.list(4)
+{
+  "Name": "sparkCS.sparkCL"
+}
+{
+  "Name": "testsdb.prod_tab"
+}
+{
+  "Name": "testsdb.sale_tab"
+}
+Return 3 row(s).
+Takes 0.000916s.
+> db.testsdb.prod_tab.find()
+> db.testsdb.sale_tab.find()
+```
+### 5.3 把这两张表映射为postgresql的外表：
+
+1.创建postgre 数据库,数据库名称与MySQL中的相同。
+```
+cd /opt/sequoiasql/postgresql/bin
+./sdb_sql_ctl createdb testsdb myinst
+```
+2.进入 SequoiaSQL PostgreSQL shell 环境
+```
+./psql -p 5432 testsdb
+```
+3.加载SequoiaDB连接驱动
+```
+pgsdb=# create extension sdb_fdw;
+```
+配置与SequoiaDB连接参数
+```
+pgsdb=# create server sdb_server foreign data wrapper sdb_fdw options(address '127.0.0.1', service '11810', preferedinstance 'A', transaction 'off');
+```
+4.映射sdb表为postgresql的外表
+```
+create foreign table prod_tab (prod_name text,prod_id int,prod_place text) server sdb_server options ( collectionspace 'testsdb', collection 'prod_tab', decimal 'on');
+CREATE FOREIGN TABLE
+create foreign table sale_tab (prod_id int,prod_volume int,sale_quantity real) server sdb_server options ( collectionspace 'testsdb', collection 'sale_tab', decimal 'on');
+
+CREATE FOREIGN TABLE
+testsdb=# \d
+              List of relations
+ Schema |   Name   |     Type      |  Owner   
+--------+----------+---------------+----------
+ public | prod_tab | foreign table | sdbadmin
+ public | sale_tab | foreign table | sdbadmin
+(2 rows)
+```
+更新表的统计信息
+```
+pgsdb=# analyze prod_tab;
+ANALYZE
+testsdb=# analyze sale_tab;    
+ANALYZE
+```
+检查表：
+```
+pgsdb=# \d
+```
+5.在postgresql中执行操作
+```
+testsdb=# select * from prod_tab where prod_id=3;
+ prod_name | prod_id | prod_place 
+-----------+---------+------------
+ prod3     |       3 | chengdu3
+(1 row)
+testsdb=# select a.prod_name,a.prod_id,a.prod_place,b.prod_volume,b.sale_quantity from prod_tab a,sale_tab b where a.prod_id=b.prod_id;
+testsdb=# select a.prod_id,sum(b.prod_volume) total_volume,sum(b.sale_quantity) total_quantity from prod_tab a,sale_tab b where a.prod_id=b.prod_id group by a.prod_id;
+```
+
+退出psql
+```
+\q
+```
+### 5.4 在sparksql实例中访问数据
+1.关联sdb表与sparksql表
+```
+cd /opt/spark-2.1.3-bin-hadoop2.7/bin
+/opt/spark-2.1.3-bin-hadoop2.7/bin/beeline -u jdbc:hive2://sdb:10000 -n sdbadmin -p sdbadmin
+Connecting to jdbc:hive2://sdb:10000
+log4j:WARN No appenders could be found for logger (org.apache.hive.jdbc.Utils).
+log4j:WARN Please initialize the log4j system properly.
+log4j:WARN See http://logging.apache.org/log4j/1.2/faq.html#noconfig for more info.
+Connected to: Spark SQL (version 2.1.3)
+Driver: Hive JDBC (version 1.2.1.spark2)
+Transaction isolation: TRANSACTION_REPEATABLE_READ
+Beeline version 1.2.1.spark2 by Apache Hive
+0: jdbc:hive2://sdb:10000> 
+```
+
+关联sdb中的集合空间和集合，为spark中的一张表：
+```
+CREATE table prod_tab (prod_name string,prod_id int,prod_place string) using com.sequoiadb.spark OPTIONS ( host 'sdb:11810', collectionspace 'testsdb', collection 'prod_tab');
+
+CREATE table sale_tab (prod_id int,prod_volume int,sale_quantity double) using com.sequoiadb.spark OPTIONS ( host 'sdb:11810', collectionspace 'testsdb', collection 'sale_tab');
+```
+2.在sparksql中操作数据
+```
+select a.prod_name,a.prod_id,a.prod_place,b.prod_volume,b.sale_quantity from prod_tab a,sale_tab b where a.prod_id=b.prod_id;
+select a.prod_id,sum(b.prod_volume) total_volume,sum(b.sale_quantity) total_quantity from prod_tab a,sale_tab b where a.prod_id=b.prod_id group by a.prod_id;
+```
+3.退出beeline
+```
+0: jdbc:hive2://sdb:10000> !quit
+```
+退出Container
+```
+$exit
+#exit
+```
+在属主机中，删除Container
+```
+docker rm sdbtestfu
+```
+
+## 六，S3实例简介
+SequoiaS3 系统实现通过 AWS S3 接口访问 SequoiaDB 的能力。
+
+SequoiaS3 将 S3 接口中的区域、桶和对象映射为 SequoiaDB 中的集合空间，集合，记录和Lob，实现桶的增、删、查，对象的增、删、查，对象的版本管理，以及分段上传的能力，支持从 Amazon S3 或其他实现 S3 接口的存储服务平滑迁移到 SequoiaDB数据库。
+
+### 6.1试验环境准备
+在属主机上启动docker试验容器，并进入container。
+```
+docker run -it --privileged=true --name sdbtestfu -h sdb sdbinstance5
+```
+步骤在Container中执行。
+S3实例目录及启动sdb进程：
+``` 
+su - sdbadmin
+sdbstart -t all
+sdblist -l
+
+cd /opt/sequoiadb/tools/sequoias3
+ls
+```
+S3实例相关文件和目录：
+
+README.txt  config  log  nohup.out  sample  sequoia-s3-3.2.4.jar  sequoias3.sh
+
+修改.profile文件，增加JAVA_HOME，在本例中已经修改：
+```
+cd
+vi ~/.profile
+```
+示例配置：
+```
+JAVA_HOME=/opt/sequoiadb/java/jdk
+CLASSPATH=$JAVA_HOME/lib/dt.jar:$JAVA_HOME/lib/tools.jar
+PATH=$JAVA_HOME/bin:$PATH
+export JAVA_HOME CLASSPATH PATH
+```
+退出vi执行：
+```
+. .profile
+```
+
+### 6.2 配置sdb及S3实例
+
+配置 SequoiaDB,SequoiaS3 对接的 SequoiaDB 需开启RC级别事务，且配置为等锁模式
+```
+sdb
+> var db = new Sdb( "localhost", 11810 )
+> db.updateConf( { transactionon:true, transisolation:1, translockwait:true} )
+```
+观察sdb中的集合及集合空间，目前没有：
+```
+> db.list(4)
+Return 0 row(s).
+Takes 0.002024s.
+> quit
+```
+配置 SequoiaS3,打开 config 目录中的 application.properties 文件
+```
+$ vi config/application.properties
+```
+配置对外监听端口
+```
+server.port=8002
+```
+配置 coord 节点的 IP 和端口，可以配置多组并使用逗号分隔
+```
+sdbs3.sequoiadb.url=sequoiadb://localhost:11810
+```
+如果在 SequoiaDB 中已经为 SequoiaS3 的存储创建了专属的域，需在此处配置.在本例中不需要创建，使用缺省的domain。
+```
+sdbs3.sequoiadb.meta.domain=domain1
+sdbs3.sequoiadb.data.domain=domain2
+```
+上述配置是启动 SequoiaS3 的基础配置，其他配置请参考本章末尾的配置说明。
+
+阅读tools/sequoias3目录中的README.txt文件。
+注意缺省的用户名，AccessKeyID，SecreatKeyID，本例中使用这些参数，访问S3接口：
+more README.txt
+
+默认管理员账户名：administrator
+默认管理员AccessKeyID：ABCDEFGHIJKLMNOPQRST
+默认管理员用户SecreatKeyID：abcdefghijklmnopqrstuvwxyz0123456789ABCD
+
+
+
+### 6.3 启动S3实例
+配置修改完成后，通过 ./sequoias3.sh 可执行脚本启动 SequoiaS3
+```
+./sequoias3.sh start
+start sequoia-s3-3.2.4.jar
+pid:1285
+sequoias3(8002) is started. pid: 1285
+```
+查看sdb中的S3元数据表,S3实例在启动的时候如果这些元数据表不存在会自动创建：
+```
+sdb
+> db=new Sdb()
+localhost:11810
+Takes 0.001103s.
+> db.list(4)
+{
+  "Name": "S3_SYS_Meta.S3_User"
+}
+{
+  "Name": "S3_SYS_Meta.S3_Bucket"
+}
+{
+  "Name": "S3_SYS_Meta.S3_Region"
+}
+{
+  "Name": "S3_SYS_Meta.S3_RegionSpace"
+}
+{
+  "Name": "S3_SYS_Meta.S3_IDGenerator"
+}
+{
+  "Name": "S3_SYS_Meta.S3_Task"
+}
+{
+  "Name": "S3_SYS_Meta.S3_UploadMeta"
+}
+{
+  "Name": "S3_SYS_Meta.S3_Part"
+}
+{
+  "Name": "S3_SYS_Meta.S3_ACL"
+}
+{
+  "Name": "S3_SYS_Meta.S3_ObjectMeta"
+}
+{
+  "Name": "S3_SYS_Meta.S3_ObjectMetaHistory"
+}
+{
+  "Name": "S3_SYS_Meta.S3_ObjectDir"
+}
+Return 12 row(s).
+Takes 0.001152s.
+> quit
+```
+
+如需停止 SequoiaS3 进程，执行 stop -p {port} 停止监听指定端口的 SequoiaS3 进程，或执行 stop -a 停止所有 SequoiaS3 进程
+```
+$ ./sequoias3.sh stop -p 8002
+Terminating process 22754: sequoias3(8002)
+```
+### 6.4 操作bucket及文件对象
+在本例中将使用curl restful方式来测试s3接口：
+```
+cd ~/s3test
+```
+1.创建桶sdbbucket。
+
+在shell环境中设置变量及相关值：
+```
+bucket="sdbbucket"  
+dateValue=`date -R`  
+resource="/${bucket}/"  
+contentType="application/octet-stream"  
+stringToSign="PUT\n\n\n${dateValue}\n${resource}"  
+s3Key="ABCDEFGHIJKLMNOPQRST"  
+s3Secret="abcdefghijklmnopqrstuvwxyz0123456789ABCD"  
+signature=`echo -en ${stringToSign} | openssl sha1 -hmac ${s3Secret} -binary | base64`  
+```
+使用curl 创建一个bucket（sdbbucket）：
+```
+sdbadmin@sdb:/opt/sequoiadb/tools/sequoias3/sample$ curl -v -X PUT "http://localhost:8002/${bucket}" -H "Host: localhost:8002" -H "Date: ${dateValue}" -H "Authorization: AWS ${s3Key}:${signature}"   
+```
+输出结果：
+```
+*   Trying 127.0.0.1...
+* TCP_NODELAY set
+* Connected to localhost (127.0.0.1) port 8002 (#0)
+> PUT /sdbbucket HTTP/1.1
+> Host: localhost:8002
+> User-Agent: curl/7.58.0
+> Accept: */*
+> Date: Tue, 07 Jan 2020 06:38:51 +0000
+> Authorization: AWS ABCDEFGHIJKLMNOPQRST:bwJUtR+4GbJ5xFROUY1rD0OK/+E=
+> 
+< HTTP/1.1 200 
+< location: /sdbbucket
+< Content-Length: 0
+< Date: Tue, 07 Jan 2020 06:53:16 GMT
+< 
+* Connection #0 to host localhost left intact
+```
+
+2.获取S3中的bucket信息：
+```
+curl -v -X GET "http://localhost:8002" -H "Host: localhost:8002" -H "Date: ${dateValue}" -H "Authorization: AWS ${s3Key}:${signature}"   
+```
+命令输出结果：
+```
+Note: Unnecessary use of -X or --request, GET is already inferred.
+* Rebuilt URL to: http://localhost:8002/
+*   Trying 127.0.0.1...
+* TCP_NODELAY set
+* Connected to localhost (127.0.0.1) port 8002 (#0)
+> GET / HTTP/1.1
+> Host: localhost:8002
+> User-Agent: curl/7.58.0
+> Accept: */*
+> Date: Tue, 07 Jan 2020 06:38:51 +0000
+> Authorization: AWS ABCDEFGHIJKLMNOPQRST:bwJUtR+4GbJ5xFROUY1rD0OK/+E=
+> 
+< HTTP/1.1 200 
+< Content-Type: application/xml;charset=UTF-8
+< Transfer-Encoding: chunked
+< Date: Tue, 07 Jan 2020 07:04:27 GMT
+< 
+* Connection #0 to host localhost left intact
+<ListAllMyBucketsResult><Owner><DisplayName>administrator</DisplayName><ID>1</ID></Owner><Buckets><Bucket><Name>sdbbucket</Name><CreationDate>2020-01-07T06:53:16.674Z</CreationDate></Bucket></Buckets></ListAllMyBucketsResult>
+```
+可以看到之前创建的桶sdbbucket的信息。
+
+
+3.向桶中写入文件，samplefile.txt：
+```
+ls -l /home/sdbadmin/s3test/samplefile.txt
+```
+在shell环境中设置变量及相关值：
+```
+file=/home/sdbadmin/s3test/samplefile.txt
+objname="testfile1"  
+bucket=sdbbucket  
+url="localhost:8002"  
+resource="/${bucket}/${objname}"  
+contentType="application/x-compressed-tar"  
+dateValue=`date -R`  
+stringToSign="PUT\n\n${contentType}\n${dateValue}\n${resource}"  
+s3Key="ABCDEFGHIJKLMNOPQRST"  
+s3Secret="abcdefghijklmnopqrstuvwxyz0123456789ABCD"  
+signature=`echo -en ${stringToSign} | openssl sha1 -hmac ${s3Secret} -binary | base64`
+```
+使用curl 向sdbbucket中写入文件“samplefile。txt”，在S3中的名称是”testfile1“。
+```
+curl -X PUT -T "${file}" -H "Host: ${url}" -H "Date: ${dateValue}" -H "Content-Type: ${contentType}" -H "Authorization: AWS ${s3Key}:${signature}" "http://${url}/${bucket}/${objname}" 
+```
+4.从桶sdbbucket中读取文件对象“testfile1”，并存放到本地目录：
+在shell环境中设置变量及相关值：
+```
+file="./mydownloadfile"  
+objname="testfile1"  
+bucket=sdbbucket  
+url="localhost:8002"  
+resource="/${bucket}/${objname}"  
+contentType="application/x-compressed-tar"  
+dateValue=`date -R`  
+stringToSign="GET\n\n${contentType}\n${dateValue}\n${resource}"  
+s3Key="ABCDEFGHIJKLMNOPQRST"  
+s3Secret="abcdefghijklmnopqrstuvwxyz0123456789ABCD"  
+signature=`echo -en ${stringToSign} | openssl sha1 -hmac ${s3Secret} -binary | base64`
+```
+使用curl 执行：
+```  
+curl -o ${file} -X GET -H "Host: ${url}" -H "Date: ${dateValue}" -H "Content-Type: ${contentType}" -H "Authorization: AWS ${s3Key}:${signature}" "http://${url}/${bucket}/${objname}"
+```
+输出结果：
+``` 
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+100 43.1M  100 43.1M    0     0  18.4M      0  0:00:02  0:00:02 --:--:-- 18.4M
+```
+查看新文件：
+```
+sdbadmin@sdb:~/s3test$ ls
+mydownloadfile  myfile  samplefile.txt
+```
+
+### 6.5 在sdb中观察S3元数据。
+S3的所有元数据都存储在sdb的集合中，可以在sdb命令行中查看。
+```
+sdb
+> db=new Sdb()
+```
+bucket的元数据，查看创建的bucket ”sdbbucket“
+```
+> db.S3_SYS_Meta.S3_Bucket.find()
+{
+  "_id": {
+    "$oid": "5e142adce4b0961c2fbc7672"
+  },
+  "ID": 1,
+  "Name": "sdbbucket",
+  "OwnerID": 1,
+  "CreationDate": 1578379996674,
+  "VersioningStatus": "None",
+  "Region": null,
+  "Delimiter": 1,
+  "Delimiter1": "/",
+  "Delimiter1CreateTime": 1578379996674,
+  "Delimiter1ModTime": 1578379996674,
+  "Delimiter1Status": "Normal",
+  "Delimiter2": null,
+  "Delimiter2CreateTime": null,
+  "Delimiter2ModTime": null,
+  "Delimiter2Status": null,
+  "TaskID": null,
+  "IsPrivate": true
+}
+Return 1 row(s).
+Takes 0.008410s.
+```
+对象的元数据，查看上载的文件的元数据。
+```
+> db.S3_SYS_Meta.S3_ObjectMeta.find()
+{
+  "_id": {
+    "$oid": "5e1432e8e4b0961c2fbc7675"
+  },
+  "Key": "testfile1",
+  "NoVersionFlag": true,
+  "BucketId": 1,
+  "CSName": "S3_SYS_Data_2020_1",
+  "CLName": "S3_ObjectData_Q1",
+  "LobId": {
+    "$oid": "5e1432dde4b0961c2fbc7674"
+  },
+  "VersionId": 0,
+  "Etag": "853422b450e9cefda8fb49bad54577bd",
+  "LastModified": 1578382056083,
+  "Size": 45201941,
+  "CacheControl": null,
+  "ContentDisposition": null,
+  "ContentEncoding": null,
+  "ContentType": "application/x-compressed-tar",
+  "DeleteMarker": false,
+  "Expires": null,
+  "ContentLanguage": null,
+  "MetaList": {},
+  "ParentId1": 0,
+  "ParentId2": null,
+  "AclID": null
+}
+Return 1 row(s).
+```
+文件对象所在的集合，这个结合由S3实例自动创建，并且缺省按照每年每个季度分表，及每个季度产生一个新的CL：
+```
+> db.S3_SYS_Data_2020_1.S3_ObjectData_Q1.listLobs()
+{
+  "Size": 45201941,
+  "Oid": {
+    "$oid": "5e1432dde4b0961c2fbc7674"
+  },
+  "CreateTime": {
+    "$timestamp": "2020-01-07-07.27.25.497000"
+  },
+  "ModificationTime": {
+    "$timestamp": "2020-01-07-07.27.36.079000"
+  },
+  "Available": true
+}
+Return 1 row(s).
+Takes 0.007528s.
+> quit
+```
+
+### 6.7从s3实例中删除文件和桶
+
+在shell环境中设置变量及相关值：
+```
+objname="testfile1"  
+bucket=sdbbucket  
+url="localhost:8002"  
+resource="/${bucket}/${objname}"  
+contentType="application/x-compressed-tar"  
+dateValue=`date -R`  
+stringToSign="GET\n\n${contentType}\n${dateValue}\n${resource}"  
+s3Key="ABCDEFGHIJKLMNOPQRST"  
+s3Secret="abcdefghijklmnopqrstuvwxyz0123456789ABCD"  
+signature=`echo -en ${stringToSign} | openssl sha1 -hmac ${s3Secret} -binary | base64`  
+```
+使用curl命令 删除sdbbucket中的文件对象“testfile1”。
+```
+sdbadmin@sdb:~/s3test$ curl  -X DELETE  -H "Host: ${url}" -H "Date: ${dateValue}" -H "Content-Type: ${contentType}" -H "Authorization: AWS ${s3Key}:${signature}" "http://${url}/${bucket}/${objname}"
+```
+
+使用curl命令，从s3中删除桶”sdbbucket“：
+```
+curl  -X DELETE  -H "Host: ${url}" -H "Date: ${dateValue}" -H "Content-Type: ${contentType}" -H "Authorization: AWS ${s3Key}:${signature}" "http://${url}/${bucket}"
+```
+
+在sdb中观察元数据,bucket和对象都被删除：
+```
+sdb
+
+> db.S3_SYS_Data_2020_1.S3_ObjectData_Q1.listLobs()
+Return 0 row(s).
+Takes 0.006252s.
+> db.S3_SYS_Meta.S3_ObjectMeta.find()
+Return 0 row(s).
+Takes 0.003769s.
+> db.S3_SYS_Meta.S3_Bucket.find()
+Return 0 row(s).
+Takes 0.001612s.
+```
+执行完成，退出docker
+```
+$exit
+#exit
+```
+在属主机中，删除Container
+```
+docker rm sdbtestfu
+```
+## 七，FS实例简介
+SequoiaFS文件系统是基于FUSE在Linux系统下实现的一套文件系统，支持通用的文件操作API。SequoiaFS利用SequoiaDB的元数据集合存储文件和目录的属性信息，lob对象存储文件的数据内容，从而实现了类似NFS分布式网络文件系统。用户可以将远程SequoiaDB的某个目标集合通过映射的方式挂载到本地FS节点，在FS节点的挂载目录下实现通过通用文件系统API对文件和目录进行操作。
+### 7.1 试验环境准备
+在属主机上启动docker试验容器，并进入container。
+```
+docker run -it --privileged=true --name sdbtestfu -h sdb sdbinstance5
+```
+以下步骤在Container中执行。
+sequoiaFS目录,启动sdb：
+```
+su - sdbadmin
+sdbstart -t all
+sdblist -l
+```
+修改.profile文件，增加JAVA_HOME，在本例中已经修改：
+```
+cd
+vi ~/.profile
+
+JAVA_HOME=/opt/sequoiadb/java/jdk
+CLASSPATH=$JAVA_HOME/lib/dt.jar:$JAVA_HOME/lib/tools.jar
+PATH=$JAVA_HOME/bin:$PATH
+export JAVA_HOME CLASSPATH PATH
+```
+退出vi执行：
+```
+. .profile
+```
+
+查看FS实例程序：
+```
+cd /opt/sequoiadb/bin
+ls -l sequoiafs
+```
+使用root用户，把sequoiafs程序拷贝到/usr/local/bin目录：
+```
+cd /opt/sequoiadb/bin
+ chmod +x sequoiafs 
+ cp sequoiafs  /usr/local/bin/
+ which sequoiafs
+/usr/local/bin/sequoiafs
+```
+检查fuse是否安装,在本例中，已经安装了fuse 2.9.7.
+```
+# which fusermount
+/usr/local/bin/fusermount
+# fusermount --version
+fusermount version: 2.9.7
+```
+	
+### 7.2 在sdb中创建测试用的集合空间和集合，fscs.fscl
+这个集合用于存放存储在巨杉数据库中的文件系统文件。
+
+```
+su - sdbadmin
+
+sdb
+var db=new Sdb("localhost",11810)
+> db.list(4)
+Return 0 row(s).
+Takes 0.005234s.
+db.createCS("fscs")
+db.fscs.createCL("fscl")
+> db.list(4)
+{
+  "Name": "fscs.fscl"
+}
+Return 1 row(s).
+Takes 0.001115s.
+> quit
+```
+
+### 7.3 把fscl做为文件系统挂载到/opt/sequoiadb/mountpoint目录
+
+创建挂载点
+sdbadmin用户：
+```
+mkdir -p /opt/sequoiadb/mountpoint
+
+chown sdbadmin:sdbadmin_group /opt
+```
+创建sequoiafs的配置文件目录和日志目录
+```
+mkdir -p /opt/sequoiafs/conf/fscs_fscl/001/
+mkdir -p /opt/sequoiafs/log/fscs_fscl/001/
+```
+测试场景产生一个空配置文件，使用缺省值
+```
+touch /opt/sequoiafs/conf/fscs_fscl/001/sequoiafs.conf
+```
+
+挂载目录时，除了目标集合collection外，还需要指定一系列参数，具体参数选项详情请查看选项。。
+
+通过-i或者--hosts进行指定远程DB节点（协调节点），一旦挂载之后，mountpoint目录下的所有文件的属性信息会存放在远
+程DB节点上的目录元数据集合及文件元数据集合中，而文件内容会以lob的形式存放在目标集合下。目录元数据集合和文件元数据集合可
+以分别通过-d(或--metadircollection)和-f（或--metafilecollection）在进行指定，也可以直接通过指定--autocreate默认生成，该例指定默认生成。
+```
+sdbadmin@sdb:~$ sequoiafs /opt/sequoiadb/mountpoint -i localhost:11810 -l fscs.fscl --autocreate -c /opt/sequoiafs/conf/fscs_fscl/001/ --diagpath  /opt/sequoiafs/log/fscs_fscl/001/ -o big_writes -o max_write=131072 -o max_read=131072
+```
+
+查看挂载信息,本地FS节点通过mount可以看到挂载信息.
+```
+mount
+```
+输出结果：
+```
+overlay on / type overlay (rw,relatime,seclabel,lowerdir=/var/lib/docker/overlay2/l/DI4PSN6ELCXDXK443564WEXB7Y:/var/lib/docker/overlay2/l/NWZWM4A4OYC3WO6ADRVQQV6T2V:/var/lib/docker/overlay2/l/WFL5M2RHD62FQ7SLAFGSCE3TRH:/var/lib/docker/overlay2/l/SYJHIX4TNODUAPSPGCLWSTKODN:/var/lib/docker/overlay2/l/WZUFVHXOULMW2IFRZOOTU6VJ7N:/var/lib/docker/overlay2/l/EM56OX6PUQKUELGE7BH46VPL7B:/var/lib/docker/overlay2/l/MBSJJIS6IRXO35NR7JMZ2JN3SA,upperdir=/var/lib/docker/overlay2/24b08d093bdae298061ecf21280811fd80dad666169d262df0a3154c637c44a8/diff,workdir=/var/lib/docker/overlay2/24b08d093bdae298061ecf21280811fd80dad666169d262df0a3154c637c44a8/work)
+proc on /proc type proc (rw,nosuid,nodev,noexec,relatime)
+tmpfs on /dev type tmpfs (rw,nosuid,seclabel,size=65536k,mode=755)
+devpts on /dev/pts type devpts (rw,nosuid,noexec,relatime,seclabel,gid=5,mode=620,ptmxmode=666)
+sysfs on /sys type sysfs (rw,nosuid,nodev,noexec,relatime,seclabel)
+tmpfs on /sys/fs/cgroup type tmpfs (rw,nosuid,nodev,noexec,relatime,seclabel,mode=755)
+cgroup on /sys/fs/cgroup/systemd type cgroup (rw,nosuid,nodev,noexec,relatime,xattr,release_agent=/usr/lib/systemd/systemd-cgroups-agent,name=systemd)
+cgroup on /sys/fs/cgroup/net_cls,net_prio type cgroup (rw,nosuid,nodev,noexec,relatime,net_prio,net_cls)
+cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blkio)
+cgroup on /sys/fs/cgroup/perf_event type cgroup (rw,nosuid,nodev,noexec,relatime,perf_event)
+cgroup on /sys/fs/cgroup/cpu,cpuacct type cgroup (rw,nosuid,nodev,noexec,relatime,cpuacct,cpu)
+cgroup on /sys/fs/cgroup/hugetlb type cgroup (rw,nosuid,nodev,noexec,relatime,hugetlb)
+cgroup on /sys/fs/cgroup/pids type cgroup (rw,nosuid,nodev,noexec,relatime,pids)
+cgroup on /sys/fs/cgroup/freezer type cgroup (rw,nosuid,nodev,noexec,relatime,freezer)
+cgroup on /sys/fs/cgroup/devices type cgroup (rw,nosuid,nodev,noexec,relatime,devices)
+cgroup on /sys/fs/cgroup/memory type cgroup (rw,nosuid,nodev,noexec,relatime,memory)
+cgroup on /sys/fs/cgroup/cpuset type cgroup (rw,nosuid,nodev,noexec,relatime,cpuset)
+mqueue on /dev/mqueue type mqueue (rw,nosuid,nodev,noexec,relatime,seclabel)
+shm on /dev/shm type tmpfs (rw,nosuid,nodev,noexec,relatime,seclabel,size=65536k)
+/dev/mapper/centos-root on /etc/resolv.conf type xfs (rw,relatime,seclabel,attr2,inode64,noquota)
+/dev/mapper/centos-root on /etc/hostname type xfs (rw,relatime,seclabel,attr2,inode64,noquota)
+/dev/mapper/centos-root on /etc/hosts type xfs (rw,relatime,seclabel,attr2,inode64,noquota)
+devpts on /dev/console type devpts (rw,nosuid,noexec,relatime,seclabel,gid=5,mode=620,ptmxmode=666)
+sequoiafs on /opt/sequoiadb/mountpoint type fuse.sequoiafs (rw,nosuid,nodev,relatime,user_id=1000,group_id=1000,max_read=131072)
+```
+可以看到，/opt/sequoiadb/mountpoint已经通过sequoiafs已经挂载上了，文件系统类型为fuse.sequoiafs。
+
+在DB节点可以查看相关挂载信息。
+```
+sdb
+> var db = new Sdb("localhost", 11810) 
+Takes 0.001705s.
+> db.list(4)
+{
+  "Name": "fscs.fscl"
+}
+{
+  "Name": "sequoiafs.fscl_dir142361856883863522"
+}
+{
+  "Name": "sequoiafs.fscl_file142361856883863522"
+}
+{
+  "Name": "sequoiafs.maphistory"
+}
+{
+  "Name": "sequoiafs.sequenceid"
+}
+```
+对于每次mount，可以通过以上5张表查看相关信息，后续会介绍各表的作用，sequoiafs.maphistory为映射挂载历史信息表，记录历史挂载的关键数据信息。 
+```
+> db.sequoiafs.maphistory.find()
+{
+  "_id": {
+    "$oid": "5e1446c403418412fd89a1c7"
+  },
+  "SourceCL": "fscs.fscl",
+  "DirMetaCL": "sequoiafs.fscl_dir142361856883863522",
+  "FileMetaCL": "sequoiafs.fscl_file142361856883863522",
+  "Address": "eth0:172.17.0.2;",
+  "MountPoint": "/opt/sequoiadb/mountpoint",
+  "MountTime": {
+    "MountTime": "2020-01-07-08.52.20.080753"
+  }
+}
+Return 1 row(s).
+Takes 0.004797s.
+
+> quit
+```
+每次挂载时都会记录一条历史数据，以供历史查询，其基本含义如下： 
+
+记录名称 描述说明 
+SourceCL 目标映射集合名称 
+DirMetaCL 目录元数据集合名称 
+FileMetaCL 文件元数据集合名称 
+Address FS节点地址 
+MountPoint FS节点挂载时的目录 
+
+sequoiafs.sequenceid为目录元数据中目录记录的id序列表，目的用于构造目录的唯一性。 
+
+sequoiafs.bar_dir148139183721030和sequoiafs.bar_file148139183721030分别为目录和文件的元数据集合表，由于SequoiaFS启动挂载时指定了--autocreate，所以这里是默认生成的，用以记录FS挂载目录下的目录和文件信息。
+
+### 7.4 在FS节点挂载目录下创建文件和目录
+```
+$ cd /opt/sequoiadb/mountpoint/
+ls
+$ touch testfile
+$ echo 'hello, this is a testfile!' >> testfile
+$ cat testfile 
+hello, this is a testfile!
+ls
+$ mkdir testdir
+$ ls
+testdir  testfile
+```
+上面我们在FS挂载目录下创建了文件testfile并写入'hello, this is a testfile!'，并创建了子目录testdir。在DB节点查看目录元数据集合，可以查到testdir目录元数据信息记录。
+
+fscl_file142361856883863522是自动产生的，可能和课程中产生的不一样，可以使用: db.list(4)查看。
+```
+sdb
+db=new Sdb()
+> db.sequoiafs.fscl_file142361856883863522.find()
+{
+  "AccessTime": 1578387527247,
+  "CreateTime": 1578387527243,
+  "Gid": 1000,
+  "LobOid": "00005e144840360002c2120b",
+  "Mode": 33188,
+  "ModifyTime": 1578387527247,
+  "NLink": 1,
+  "Name": "testfile",
+  "Pid": 1,
+  "Size": 23,
+  "SymLink": "",
+  "Uid": 1000,
+  "_id": {
+    "$oid": "5e14484703418412fd89a1c8"
+  }
+}
+Return 1 row(s).
+Takes 0.005751s.
+
+> db.sequoiafs.fscl_dir142361856883863522.find()
+{
+  "_id": {
+    "$oid": "5e14487603418412fd89a1c9"
+  },
+  "Name": "testdir",
+  "Mode": 16877,
+  "Uid": 1000,
+  "Gid": 1000,
+  "Pid": 1,
+  "Id": 2,
+  "NLink": 2,
+  "Size": 4096,
+  "CreateTime": 1578387574340,
+  "ModifyTime": 1578387574340,
+  "AccessTime": 1578387574340,
+  "SymLink": ""
+}
+Return 1 row(s).
+Takes 0.001073s.
+> quit
+```
+
+在mount点删除文件和目录:
+```
+cd /opt/sequoiadb/mountpoint
+ls
+rm -rf testfile
+rm -R testdir
+ls
+```
+### 7.5 停止FS实例运行，并退出Container：
+
+fusermount卸载文件系统mount点，sequoiafs进程自动停止运行。
+```
+$fusermount -u /opt/sequoiadb/mountpoint
+ps -C sequoiafs
+```
+执行完成，退出docker
+```
+$exit
+#exit
+```
+在属主机中，删除Container
+```
+docker rm sdbtestfu
+```
+## 课程总结
+Sequoiadb是一个分布式数据库，可以存储海量的结构化和非结构化数据，并提供多种接口实例，以方便应用程序的访问。在本课程中简单的介绍了多种实例的安装配置及数据操作过程。是实际应用中，可以根据应用程序的需要安装配置相应的接口实例，并可以实现数据的多实例共享。
+
+
+
+#### 参考资料（可选）
+
+- 参考资料及链接1
+- 参考资料及链接2
+- ...
+
+#### 版权声明（可选）
+
+在这里写课程内容的版权声明
